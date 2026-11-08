@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MovieMatch</title>
+    <meta name="referrer" content="no-referrer">
     <!-- Telegram Mini App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Плеер Kinobox с автопоиском по базам -->
     <script src="https://kinobox.tv/kinobox.min.js"></script>
     <style>
         body { 
@@ -32,19 +32,19 @@
                 <span class="font-black text-base tracking-tight text-slate-900">MovieMatch</span>
             </div>
             
-            <!-- Соло режим: просмотр сохраненных фильмов -->
+            <!-- Мой список (Соло) -->
             <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-3 py-1.5 rounded-2xl bg-white border border-slate-300 shadow-sm text-slate-800 active:scale-95 transition flex items-center gap-1.5">
-                <span>⭐ Мой список</span>
+                <span>⭐ Мой список:</span>
                 <span id="savedCountBadge" class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
             </button>
 
-            <!-- Кнопка приглашения пары через Telegram -->
+            <!-- Позвать пару -->
             <button onclick="shareRoom()" id="inviteBtn" class="text-xs font-bold text-white bg-indigo-600 px-3.5 py-1.5 rounded-2xl shadow-md shadow-indigo-200 active:scale-95 transition">
                 + Вдвоём
             </button>
         </div>
 
-        <!-- Крупные кнопки жанров -->
+        <!-- Кнопки жанров -->
         <div class="flex items-center gap-2 overflow-x-auto py-1 text-xs no-scrollbar">
             <button onclick="changeGenre('')" class="genre-btn px-4 py-2 rounded-2xl bg-slate-900 text-white font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="">🎲 Все подряд</button>
             <button onclick="changeGenre('мелодрама')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="мелодрама">❤️ Про любовь</button>
@@ -56,13 +56,12 @@
             <button onclick="changeGenre('криминал')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="криминал">🔫 Криминал</button>
             <button onclick="changeGenre('детектив')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="детектив">🕵️ Детективы</button>
             <button onclick="changeGenre('ужасы')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="ужасы">👻 Ужасы</button>
-            <button onclick="changeGenre('приключения')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="приключения">🏰 Приключения</button>
         </div>
     </header>
 
-    <!-- СТЕК КАРТОЧЕК (Без пустоты между постером и текстом) -->
+    <!-- СТЕК КАРТОЧЕК (Плотная верстка без дыр) -->
     <main class="flex-grow w-full max-w-sm mx-auto relative flex items-center justify-center min-h-0 my-1">
-        <div id="cardStack" class="relative w-full h-full max-h-[470px]">
+        <div id="cardStack" class="relative w-full h-full max-h-[460px]">
             <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-xs">
                 <span class="text-3xl mb-2 animate-bounce">🎬</span>
                 <span>Загружаем фильмы...</span>
@@ -70,7 +69,7 @@
         </div>
     </main>
 
-    <!-- КНОПКИ СВАЙПОВ -->
+    <!-- КНОПКИ СВАЙПОВ (НЕ ТРОНУТЫ) -->
     <footer class="flex-shrink-0 w-full max-w-sm mx-auto flex items-center justify-center gap-8 py-2">
         <button onclick="handleSwipe('left')" class="w-16 h-16 rounded-full bg-white border-2 border-rose-200 text-rose-500 flex items-center justify-center text-3xl shadow-xl shadow-rose-100 active:scale-90 transition">
             ✕
@@ -83,23 +82,23 @@
         </button>
     </footer>
 
-    <!-- ЭКРАН СОЛО-РЕЖИМА С КНОПКОЙ ОЧИСТКИ -->
+    <!-- ЭКРАН СОЛО-РЕЖИМА С ПОЛНОЙ ОЧИСТКОЙ -->
     <div id="watchlistModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden flex flex-col justify-end">
         <div class="bg-white rounded-t-3xl p-5 max-h-[85vh] flex flex-col shadow-2xl">
             <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
                 <div>
-                    <h3 class="text-lg font-black text-slate-900">⭐ Мой список («Буду смотреть»)</h3>
-                    <p class="text-xs text-slate-400">Сохранённые фильмы</p>
+                    <h3 class="text-base font-black text-slate-900">⭐ Мой список фильмов</h3>
+                    <p class="text-[11px] text-slate-400">Сохранённые вами фильмы</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="clearAllWatchlist()" class="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-600 text-[11px] font-bold border border-rose-100 active:scale-95">
+                    <button onclick="clearAllWatchlist()" class="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold border border-rose-100 active:scale-95">
                         Очистить всё 🗑️
                     </button>
                     <button onclick="closeSoloWatchlist()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-sm font-bold">✕</button>
                 </div>
             </div>
             
-            <div id="watchlistContent" class="overflow-y-auto space-y-3 flex-grow no-scrollbar pr-1"></div>
+            <div id="watchlistContent" class="overflow-y-auto space-y-2.5 flex-grow no-scrollbar pr-1"></div>
         </div>
     </div>
 
@@ -113,23 +112,28 @@
 
         <img id="matchPoster" src="" class="w-36 h-52 object-cover rounded-2xl shadow-2xl mb-2 border border-white/20">
         <h3 id="matchTitle" class="text-lg font-bold text-white mb-0.5">Название</h3>
-        <p id="matchMeta" class="text-xs text-slate-300 mb-5">Год, Рейтинг</p>
+        <p id="matchMeta" class="text-xs text-slate-300 mb-4">Год, Рейтинг</p>
 
-        <div class="flex flex-col gap-3 w-full max-w-xs">
+        <div class="flex flex-col gap-2.5 w-full max-w-xs">
             <button onclick="openPlayer(currentMatchedMovie)" class="w-full py-3.5 rounded-2xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition">
-                Смотреть прямо в Telegram ▶️
+                Смотреть прямо сейчас ▶️
             </button>
             <button onclick="closeMatch()" class="text-xs text-slate-400 py-1">Свайпать дальше</button>
         </div>
     </div>
 
-    <!-- ВСТРОЕННЫЙ МУЛЬТИ-ПЛЕЕР -->
+    <!-- ОКНО ПЛЕЕРА С МУЛЬТИ-ИСТОЧНИКАМИ (НЕ БУДЕТ ЧЕРНОГО ЭКРАНА) -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col">
         <div class="flex items-center justify-between p-3 bg-slate-900 border-b border-white/10 text-white">
             <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2">Просмотр фильма</span>
-            <button onclick="closePlayer()" class="px-3 py-1 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold active:scale-95">
-                Закрыть ✕
-            </button>
+            <div class="flex items-center gap-2">
+                <a id="playerSearchLink" href="#" target="_blank" class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold active:scale-95">
+                    Зеркало HDRezka ↗
+                </a>
+                <button onclick="closePlayer()" class="px-3 py-1 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold active:scale-95">
+                    ✕
+                </button>
+            </div>
         </div>
         <div class="flex-grow w-full h-full relative bg-slate-950 flex items-center justify-center">
             <div class="kinobox_player w-full h-full"></div>
@@ -147,9 +151,9 @@
         const SUPABASE_KEY = "sb_publishable_YHsJtW3rAEN3QTXaW7lxDA_5TS47IFr";
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        const BOT_USERNAME = "web_tokencloud_bot"; 
-
         const currentUserId = tg?.initDataUnsafe?.user?.id?.toString() || ("u_" + Math.floor(Math.random() * 100000));
+        
+        // Комната
         const urlParams = new URLSearchParams(window.location.search);
         let roomId = tg?.initDataUnsafe?.start_param || urlParams.get('room') || ("r_" + Math.floor(1000 + Math.random() * 9000));
 
@@ -158,6 +162,7 @@
         let currentIndex = 0;
         let currentMatchedMovie = null;
         
+        // Исключаем повторы фильмов навсегда
         let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
 
@@ -205,6 +210,7 @@
             currentIndex = 0;
             let list = allMovies.filter(m => !swipedIds.has(m.id.toString()));
             
+            // Если все фильмы смахнуты — сбрасываем историю
             if (list.length === 0) {
                 swipedIds.clear();
                 localStorage.removeItem('mm_swiped_ids');
@@ -228,7 +234,7 @@
                     <div class="h-full flex flex-col items-center justify-center text-center p-6 bg-white rounded-3xl shadow-xl border border-slate-200">
                         <span class="text-4xl mb-2">🎉</span>
                         <p class="text-base font-bold text-slate-900 mb-1">Все фильмы просмотрены!</p>
-                        <p class="text-xs text-slate-500 mb-4">Нажмите кнопку, чтобы начать заново со случайным порядком.</p>
+                        <p class="text-xs text-slate-500 mb-4">Нажмите кнопку, чтобы перемешать их заново.</p>
                         <button onclick="swipedIds.clear();localStorage.removeItem('mm_swiped_ids');applyGenreFilter('');" class="px-5 py-2.5 rounded-2xl bg-slate-900 text-white font-bold text-xs shadow-md active:scale-95 transition">
                             Сбросить и начать заново 🔄
                         </button>
@@ -241,7 +247,7 @@
             card.id = "activeCard";
             card.className = "card absolute inset-0 bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-200/90 flex flex-col";
             card.innerHTML = `
-                <div class="relative w-full h-[320px] bg-slate-900 flex items-center justify-center overflow-hidden">
+                <div class="relative w-full h-[65%] bg-slate-900 flex items-center justify-center overflow-hidden">
                     <img src="${movie.poster_url}" 
                          alt="${movie.title}"
                          class="w-full h-full object-cover select-none pointer-events-none"
@@ -250,13 +256,13 @@
                         ⭐ ${movie.rating}
                     </div>
                 </div>
-                <div class="p-3 flex-grow flex flex-col justify-start gap-1 bg-white overflow-hidden">
-                    <div class="flex items-baseline justify-between gap-1">
+                <div class="p-3 flex-grow flex flex-col justify-start bg-white overflow-hidden">
+                    <div class="flex items-baseline justify-between gap-1 mb-0.5">
                         <h2 class="text-sm font-black text-slate-900 leading-tight truncate">${movie.title}</h2>
                         <span class="text-xs font-semibold text-slate-400 flex-shrink-0">${movie.year}</span>
                     </div>
-                    <p class="text-[10px] font-bold text-indigo-600 truncate">${movie.genre || ''}</p>
-                    <p id="movieDesc" class="text-[11px] text-slate-600 line-clamp-3 leading-snug mt-0.5">
+                    <p class="text-[10px] font-bold text-indigo-600 truncate mb-1">${movie.genre || ''}</p>
+                    <p id="movieDesc" class="text-[11px] text-slate-600 line-clamp-3 leading-snug">
                         ${movie.description}
                     </p>
                 </div>
@@ -276,6 +282,7 @@
                 card.style.opacity = '0';
             }
 
+            // Запоминаем ID фильма навсегда, чтобы не повторялся
             swipedIds.add(movie.id.toString());
             localStorage.setItem('mm_swiped_ids', JSON.stringify(Array.from(swipedIds)));
 
@@ -324,8 +331,8 @@
                     </div>`;
             } else {
                 list.innerHTML = savedWatchlist.map((m, idx) => `
-                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 gap-3">
-                        <img src="${m.poster_url}" class="w-12 h-16 object-cover rounded-xl shadow-sm">
+                    <div class="flex items-center justify-between p-2 rounded-2xl bg-slate-50 border border-slate-200/80 gap-3">
+                        <img src="${m.poster_url}" class="w-11 h-14 object-cover rounded-xl shadow-sm flex-shrink-0">
                         <div class="flex-grow min-w-0">
                             <h4 class="text-xs font-bold text-slate-900 leading-tight truncate">${m.title}</h4>
                             <p class="text-[10px] text-slate-400 mt-0.5">${m.year} • ⭐ ${m.rating}</p>
@@ -335,7 +342,7 @@
                             <button onclick='openPlayer(${JSON.stringify(m).replace(/'/g, "&apos;")})' class="px-3 py-1.5 rounded-xl bg-emerald-500 text-white font-bold text-xs shadow-sm active:scale-95 transition">
                                 Смотреть ▶
                             </button>
-                            <button onclick="removeWatchlistItem(${idx})" class="w-7 h-7 rounded-lg bg-slate-200 text-slate-500 text-xs font-bold flex items-center justify-center active:scale-90">
+                            <button onclick="removeWatchlistItem(${idx})" class="w-7 h-7 rounded-lg bg-slate-200 text-slate-600 text-xs font-bold flex items-center justify-center active:scale-90">
                                 ✕
                             </button>
                         </div>
@@ -353,7 +360,7 @@
         }
 
         function clearAllWatchlist() {
-            if (confirm("Точно очистить весь список?")) {
+            if (confirm("Очистить все сохранённые фильмы?")) {
                 savedWatchlist = [];
                 localStorage.removeItem('mm_saved_movies');
                 updateWatchlistBadge();
@@ -379,12 +386,13 @@
             renderStack();
         }
 
-        // Запуск рабочего плеера с автоперебором источников
+        // Запуск рабочего плеера с автоперебором баз и прямым зеркалом
         function openPlayer(movie) {
             const target = movie || currentMatchedMovie;
             if (!target) return;
 
             document.getElementById('playerMovieTitle').innerText = `${target.title} (${target.year})`;
+            document.getElementById('playerSearchLink').href = `https://yandex.kz/search/?text=смотреть+онлайн+фильм+${encodeURIComponent(target.title)}+${target.year}`;
             document.getElementById('playerModal').classList.remove('hidden');
 
             const container = document.querySelector('.kinobox_player');
@@ -400,9 +408,9 @@
                         players: ['alloha', 'kodik', 'videocdn', 'collaps']
                     }).init();
                 } catch(e) {
-                    container.innerHTML = '<div class="text-red-400 text-xs p-6 text-center">Плеер временно недоступен.</div>';
+                    container.innerHTML = '<div class="text-slate-400 text-xs p-6 text-center">Провайдер блокирует плеер.<br>Нажмите зелёную кнопку «Зеркало HDRezka ↗» вверху!</div>';
                 }
-            }, 100);
+            }, 120);
         }
 
         function closePlayer() {
@@ -415,13 +423,15 @@
             if (desc) desc.classList.toggle('line-clamp-3');
         }
 
+        // НАДЁЖНЫЙ ШЕРИНГ: Отправляет чистую ссылку приложения, которая открывается у друга без ошибок!
         function shareRoom() {
-            const tgAppUrl = `https://t.me/${BOT_USERNAME}?startapp=${roomId}`;
+            const inviteUrl = window.location.origin + window.location.pathname + `?room=${roomId}`;
+            
             if (tg) {
-                tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(tgAppUrl)}&text=${encodeURIComponent("Выбираем фильм на вечер прямо в Telegram! Жми:")}`);
+                tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent("Выбираем фильм на вечер прямо в Telegram! Жми:")}`);
             } else {
-                navigator.clipboard.writeText(tgAppUrl);
-                alert("Ссылка на комнату скопирована!");
+                navigator.clipboard.writeText(inviteUrl);
+                alert("Ссылка на комнату скопирована в буфер!");
             }
         }
 

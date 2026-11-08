@@ -2,7 +2,7 @@ export default {
     async fetch(request, env) {
         const url = new URL(request.url);
 
-        // БЕСКОНЕЧНЫЙ ШЛЮЗ К МИРОВОЙ БАЗЕ ФИЛЬМОВ
+        // 1. БЕСКОНЕЧНЫЙ КАТАЛОГ (800 000+ фильмов без блокировок провайдеров)
         if (url.pathname === "/api/movies") {
             const page = url.searchParams.get("page") || "1";
             const genre = url.searchParams.get("genre") || "";
@@ -18,15 +18,15 @@ export default {
                 const data = await res.json();
 
                 const movies = (data.results || [])
-                    .filter(m => m.poster_path && m.overview && m.overview.trim().length > 15)
+                    .filter(m => m.poster_path && m.overview && m.overview.trim().length > 10)
                     .map(m => ({
                         id: m.id.toString(),
                         title: m.title,
                         year: m.release_date ? m.release_date.split('-')[0] : '—',
                         rating: m.vote_average ? m.vote_average.toFixed(1) : '—',
-                        poster_url: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
-                        description: m.overview,
-                        kp_id: m.id.toString()
+                        // Постер загружается через безопасный прокси без черных полос и блокировок
+                        poster_url: `/api/poster?path=${encodeURIComponent(m.poster_path)}`,
+                        description: m.overview
                     }));
 
                 return new Response(JSON.stringify(movies), {
@@ -40,7 +40,24 @@ export default {
             }
         }
 
-        // Отдача статических файлов
+        // 2. ПРОКСИ И КЭШ ПОСТЕРОВ (Отдаются моментально и без сбоев)
+        if (url.pathname === "/api/poster") {
+            const path = url.searchParams.get("path");
+            if (!path) return new Response("Missing path", { status: 400 });
+
+            try {
+                const imgRes = await fetch(`https://image.tmdb.org/t/p/w500${path}`);
+                return new Response(imgRes.body, {
+                    headers: {
+                        "Content-Type": imgRes.headers.get("Content-Type") || "image/jpeg",
+                        "Cache-Control": "public, max-age=604800, immutable"
+                    }
+                });
+            } catch (e) {
+                return new Response("Image error", { status: 500 });
+            }
+        }
+
         return env.ASSETS.fetch(request);
     }
 };

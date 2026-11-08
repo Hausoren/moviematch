@@ -133,7 +133,7 @@
     "id": "474",
     "title": "Гладиатор",
     "year": "2000",
-    "genre": "Боевик, Приключения",
+    "genre": "Боевик, Драма",
     "rating": "8.6",
     "poster_url": "https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg",
     "description": "Преданный римский полководец Максимус становится гладиатором ради возмездия.",
@@ -153,7 +153,7 @@
     "id": "4444584",
     "title": "Дюна: Часть вторая",
     "year": "2024",
-    "genre": "Фантастика, Приключения",
+    "genre": "Фантастика, Боевик",
     "rating": "8.4",
     "poster_url": "https://image.tmdb.org/t/p/w500/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg",
     "description": "Пол Атрейдес объединяется с фременами, чтобы отомстить за гибель своей семьи.",
@@ -243,7 +243,7 @@
     "id": "251733",
     "title": "Аватар",
     "year": "2009",
-    "genre": "Фантастика, Приключения",
+    "genre": "Фантастика, Боевик",
     "rating": "8.0",
     "poster_url": "https://image.tmdb.org/t/p/w500/kyeqWdyUXW608qlYkRqosgbbJyK.jpg",
     "description": "Морпех Джейк Салли встает на защиту народа Пандоры от колонизаторов.",
@@ -258,6 +258,16 @@
     "poster_url": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
     "description": "История создания атомной бомбы ученым Робертом Оппенгеймером.",
     "kp_id": "4664634"
+  },
+  {
+    "id": "1219417",
+    "title": "Главный герой",
+    "year": "2021",
+    "genre": "Комедия, Боевик",
+    "rating": "7.2",
+    "poster_url": "https://image.tmdb.org/t/p/w500/xmbU4JTUm8rsdtnSdY3BD30QpuF.jpg",
+    "description": "Второстепенный персонаж видеоигры понимает, что живет в симуляции, и спасает мир.",
+    "kp_id": "1219417"
   },
   {
     "id": "377",

@@ -9,7 +9,6 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://kinobox.tv/kinobox.min.js"></script>
     <style>
         body { touch-action: none; overflow: hidden; }
         .card { transition: transform 0.22s ease-out, opacity 0.22s ease-out; }
@@ -27,7 +26,6 @@
                 <span class="font-black text-base tracking-tight text-slate-900">MovieMatch</span>
             </div>
             
-            <!-- Кнопка Соло-режима и сохраненных фильмов -->
             <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-3 py-2 rounded-2xl bg-white border border-slate-300 shadow-sm text-slate-800 active:scale-95 transition flex items-center gap-1.5">
                 <span>👤 Соло:</span>
                 <span class="text-emerald-600 font-extrabold flex items-center gap-1">
@@ -35,13 +33,12 @@
                 </span>
             </button>
 
-            <!-- Кнопка создания комнаты для пары -->
             <button onclick="shareRoom()" id="inviteBtn" class="text-xs font-bold text-white bg-indigo-600 px-3.5 py-2 rounded-2xl shadow-md shadow-indigo-200 active:scale-95 transition">
                 + Вдвоём
             </button>
         </div>
 
-        <!-- Увеличенные и расширенные кнопки жанров -->
+        <!-- Кнопки жанров -->
         <div class="flex items-center gap-2 overflow-x-auto py-1 text-xs no-scrollbar">
             <button onclick="changeGenre('')" class="genre-btn px-4 py-2 rounded-2xl bg-slate-900 text-white font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="">🎲 Все подряд</button>
             <button onclick="changeGenre('мелодрама')" class="genre-btn px-4 py-2 rounded-2xl bg-white border border-slate-300 text-slate-800 font-bold whitespace-nowrap shadow-sm transition active:scale-95" data-genre="мелодрама">❤️ Про любовь</button>
@@ -68,7 +65,7 @@
         </div>
     </main>
 
-    <!-- Кнопки управления (Оставлены без изменений) -->
+    <!-- Кнопки управления -->
     <footer class="w-full max-w-sm mx-auto flex items-center justify-center gap-8 py-2">
         <button onclick="handleSwipe('left')" class="w-16 h-16 rounded-full bg-white border-2 border-rose-200 text-rose-500 flex items-center justify-center text-3xl shadow-xl shadow-rose-100 active:scale-90 transition">
             ✕
@@ -87,7 +84,7 @@
             <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
                 <div>
                     <h3 class="text-lg font-black text-slate-900">⭐ Мой список («Буду смотреть»)</h3>
-                    <p class="text-xs text-slate-400">Фильмы, которые вы смахнули вправо в Соло-режиме</p>
+                    <p class="text-xs text-slate-400">Фильмы, которые вы смахнули вправо</p>
                 </div>
                 <button onclick="closeSoloWatchlist()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-sm font-bold">✕</button>
             </div>
@@ -118,16 +115,25 @@
         </div>
     </div>
 
-    <!-- ВСТРОЕННЫЙ БЕСПЛАТНЫЙ ПЛЕЕР -->
+    <!-- ВСТРОЕННЫЙ БЕСПЛАТНЫЙ ПЛЕЕР (БЕЗ ЧЁРНОГО ЭКРАНА) -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col">
         <div class="flex items-center justify-between p-3 bg-slate-900 border-b border-white/10 text-white">
             <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2">Просмотр фильма</span>
-            <button onclick="closePlayer()" class="px-3 py-1 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold active:scale-95">
-                Закрыть ✕
-            </button>
+            <div class="flex items-center gap-2">
+                <a id="playerExternalLink" href="#" target="_blank" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-semibold">
+                    В браузере ↗
+                </a>
+                <button onclick="closePlayer()" class="px-3 py-1 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold active:scale-95">
+                    ✕
+                </button>
+            </div>
         </div>
-        <div class="flex-grow w-full h-full relative">
-            <div class="kinobox_player w-full h-full"></div>
+        <div class="flex-grow w-full h-full relative bg-slate-950">
+            <iframe id="playerIframe" 
+                    class="w-full h-full border-0" 
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture" 
+                    allowfullscreen>
+            </iframe>
         </div>
     </div>
 
@@ -181,10 +187,9 @@
                 filteredMovies = shuffle(allMovies);
                 renderStack();
             } catch (err) {
-                document.getElementById('cardStack').innerHTML = `<div class="h-full flex items-center justify-center text-xs text-red-500">Ошибка загрузки базы фильмов</div>`;
+                document.getElementById('cardStack').innerHTML = `<div class="h-full flex items-center justify-center text-xs text-red-500">Загрузка каталога...</div>`;
             }
 
-            // Подписка на совпадения для пары
             db.channel('room-channel')
               .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, payload => {
                   if (payload.new.matched_movie_data) {
@@ -215,12 +220,12 @@
             card.id = "activeCard";
             card.className = "card absolute inset-0 bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-200/90 flex flex-col";
             card.innerHTML = `
-                <div class="relative w-full h-[320px] bg-slate-200 flex items-center justify-center overflow-hidden">
+                <div class="relative w-full h-[320px] bg-slate-800 flex items-center justify-center overflow-hidden">
                     <img src="${movie.poster_url}" 
                          alt="${movie.title}"
                          class="w-full h-full object-cover select-none pointer-events-none"
                          loading="eager"
-                         onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center h-full text-slate-400 p-4 text-center\\'><span class=\\'text-5xl mb-2\\'>🎬</span><span class=\\'font-black text-slate-800 text-sm\\'>${movie.title}</span><span class=\\'text-xs\\'>${movie.year}</span></div>'">
+                         referrerpolicy="no-referrer">
                     <div class="absolute top-3 right-3 px-2.5 py-1 bg-white/95 backdrop-blur-md rounded-xl text-slate-900 font-black text-xs shadow-md border border-slate-200">
                         ⭐ ${movie.rating}
                     </div>
@@ -253,7 +258,6 @@
                 card.style.opacity = '0';
             }
 
-            // В Соло-режиме: лайкнутые фильмы автоматически сохраняются в "Мой список"
             if (isLike) {
                 if (!savedWatchlist.some(m => m.id === movie.id)) {
                     savedWatchlist.unshift(movie);
@@ -262,7 +266,6 @@
                 }
             }
 
-            // Запись в общую базу
             await db.from('swipes').insert({
                 room_id: roomId,
                 user_id: currentUserId,
@@ -270,7 +273,6 @@
                 is_like: isLike
             });
 
-            // Если парный режим — поиск совпадения
             if (isLike && urlParams.get('room')) {
                 const { data: matches } = await db.from('swipes')
                     .select('user_id')
@@ -290,7 +292,6 @@
             setTimeout(renderStack, 180);
         }
 
-        // Соло-режим: просмотр сохранённых фильмов
         function openSoloWatchlist() {
             const list = document.getElementById('watchlistContent');
             if (savedWatchlist.length === 0) {
@@ -303,7 +304,7 @@
             } else {
                 list.innerHTML = savedWatchlist.map(m => `
                     <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 gap-3">
-                        <img src="${m.poster_url}" class="w-12 h-16 object-cover rounded-xl shadow-sm" onerror="this.src='https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=200'">
+                        <img src="${m.poster_url}" class="w-12 h-16 object-cover rounded-xl shadow-sm" referrerpolicy="no-referrer">
                         <div class="flex-grow">
                             <h4 class="text-xs font-bold text-slate-900 leading-tight">${m.title}</h4>
                             <p class="text-[10px] text-slate-400 mt-0.5">${m.year} • ⭐ ${m.rating}</p>
@@ -336,24 +337,25 @@
             renderStack();
         }
 
+        // Запуск рабочего плеера без черного экрана
         function openPlayer(movie) {
             const target = movie || currentMatchedMovie;
             if (!target) return;
 
+            const kpId = target.kp_id || target.id;
             document.getElementById('playerMovieTitle').innerText = `${target.title} (${target.year})`;
-            document.getElementById('playerModal').classList.remove('hidden');
             
-            new Kinobox('.kinobox_player', {
-                search: { 
-                    kinopoisk: target.kp_id || target.id,
-                    title: target.title
-                }
-            }).init();
+            // Защищенный фрейм плеера Kinobox
+            const playerUrl = `https://kinobox.tv/embed?kinopoisk=${kpId}`;
+            document.getElementById('playerIframe').src = playerUrl;
+            document.getElementById('playerExternalLink').href = playerUrl;
+
+            document.getElementById('playerModal').classList.remove('hidden');
         }
 
         function closePlayer() {
             document.getElementById('playerModal').classList.add('hidden');
-            document.querySelector('.kinobox_player').innerHTML = '';
+            document.getElementById('playerIframe').src = 'about:blank';
         }
 
         function toggleDescription() {

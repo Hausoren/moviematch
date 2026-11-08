@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MovieMatch</title>
+    <meta name="referrer" content="no-referrer">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -31,8 +32,8 @@
         </div>
 
         <!-- Фильтры жанров -->
-        <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-[11px]">
-            <button onclick="changeGenre('')" class="genre-btn px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-bold whitespace-nowrap" data-genre="">Все</button>
+        <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-[11px] no-scrollbar">
+            <button onclick="changeGenre('')" class="genre-btn px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-bold whitespace-nowrap" data-genre="">🎲 Случайные</button>
             <button onclick="changeGenre('35')" class="genre-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 whitespace-nowrap" data-genre="35">Комедии</button>
             <button onclick="changeGenre('878')" class="genre-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 whitespace-nowrap" data-genre="878">Фантастика</button>
             <button onclick="changeGenre('53')" class="genre-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 whitespace-nowrap" data-genre="53">Триллеры</button>
@@ -45,7 +46,7 @@
     <main class="relative w-full max-w-sm h-[510px] mx-auto flex items-center justify-center my-auto">
         <div id="cardStack" class="relative w-full h-full">
             <div id="loader" class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs animate-pulse">
-                Загрузка фильмов...
+                Подготовка случайной подборки...
             </div>
         </div>
     </main>
@@ -116,6 +117,23 @@
         let currentIndex = 0;
         let currentMatchedMovie = null;
 
+        // Алгоритм случайного перемешивания Fisher-Yates
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Обход блокировок картинок в Telegram через безопасный прокси
+        function getSafePoster(rawUrl) {
+            if (!rawUrl) return 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600';
+            const clean = rawUrl.replace(/^https?:\/\//, '');
+            return `https://wsrv.nl/?url=${encodeURIComponent(clean)}&w=600&output=webp`;
+        }
+
         async function init() {
             if (urlParams.get('room')) {
                 document.getElementById('roomBadge').innerText = "Комната: " + roomId;
@@ -124,17 +142,17 @@
                 await db.from('rooms').upsert({ id: roomId });
             }
 
-            // Загружаем базу со своего же сайта (БЕЗ блокировок провайдеров!)
             try {
                 const res = await fetch('./movies.json');
-                allMovies = await res.json();
-                filteredMovies = [...allMovies];
+                const data = await res.json();
+                allMovies = data || [];
+                // Перемешиваем фильмы случайно при каждом входе!
+                filteredMovies = shuffle(allMovies);
                 renderStack();
             } catch (err) {
-                document.getElementById('cardStack').innerHTML = `<div class="h-full flex items-center justify-center text-xs text-red-400">Ошибка загрузки файла movies.json</div>`;
+                document.getElementById('cardStack').innerHTML = `<div class="h-full flex items-center justify-center text-xs text-red-400">Ошибка загрузки базы фильмов</div>`;
             }
 
-            // Слушаем совпадения в комнате
             db.channel('room-channel')
               .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, payload => {
                   if (payload.new.matched_movie_data) {
@@ -150,10 +168,12 @@
             if (currentIndex >= filteredMovies.length) {
                 stack.innerHTML = `
                     <div class="h-full flex flex-col items-center justify-center text-center p-6">
-                        <span class="text-4xl mb-2">🎬</span>
-                        <p class="text-sm font-bold text-white mb-1">Все фильмы просмотрены!</p>
-                        <p class="text-xs text-slate-400 mb-4">Ждем ответных свайпов второго игрока.</p>
-                        <button onclick="currentIndex=0;renderStack()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs text-sky-400">Начать сначала</button>
+                        <span class="text-4xl mb-2">🎲</span>
+                        <p class="text-sm font-bold text-white mb-1">Подборка закончилась!</p>
+                        <p class="text-xs text-slate-400 mb-4">Нажмите кнопку, чтобы перемешать фильмы заново в новом порядке.</p>
+                        <button onclick="currentIndex=0;filteredMovies=shuffle(allMovies);renderStack()" class="px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs active:scale-95 transition">
+                            Перемешать снова 🔄
+                        </button>
                     </div>`;
                 return;
             }
@@ -163,8 +183,10 @@
             card.id = "activeCard";
             card.className = "card absolute inset-0 bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col";
             card.innerHTML = `
-                <div class="relative w-full h-[370px]">
-                    <img src="${movie.poster_url}" class="w-full h-full object-cover">
+                <div class="relative w-full h-[370px] bg-slate-950 flex items-center justify-center">
+                    <img src="${getSafePoster(movie.poster_url)}" 
+                         onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600'" 
+                         class="w-full h-full object-cover">
                     <div class="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-xl text-emerald-400 font-bold text-xs border border-white/10">
                         ⭐ ${movie.rating}
                     </div>
@@ -194,7 +216,6 @@
                 card.style.opacity = '0';
             }
 
-            // Запись в Supabase
             await db.from('swipes').insert({
                 room_id: roomId,
                 user_id: currentUserId,
@@ -223,7 +244,7 @@
 
         function showMatch(movie) {
             currentMatchedMovie = movie;
-            document.getElementById('matchPoster').src = movie.poster_url;
+            document.getElementById('matchPoster').src = getSafePoster(movie.poster_url);
             document.getElementById('matchTitle').innerText = movie.title;
             document.getElementById('matchMeta').innerText = `${movie.year} • ⭐ ${movie.rating}`;
             document.getElementById('playerMovieTitle').innerText = `${movie.title} (${movie.year})`;
@@ -241,7 +262,6 @@
             if (!currentMatchedMovie) return;
             document.getElementById('playerModal').classList.remove('hidden');
             
-            // Запуск плеера по ID Кинопоиска
             new Kinobox('.kinobox_player', {
                 search: { kinopoisk: currentMatchedMovie.kp_id || currentMatchedMovie.id }
             }).init();
@@ -270,9 +290,9 @@
         function changeGenre(genreId) {
             currentIndex = 0;
             if (!genreId) {
-                filteredMovies = [...allMovies];
+                filteredMovies = shuffle(allMovies);
             } else {
-                filteredMovies = allMovies.filter(m => m.genre_id === genreId);
+                filteredMovies = shuffle(allMovies.filter(m => m.genre_id === genreId));
             }
 
             document.querySelectorAll('.genre-btn').forEach(btn => {

@@ -19,6 +19,26 @@
         .card { transition: transform 0.22s ease-out, opacity 0.22s ease-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* В горизонтальном режиме видео занимает ровно 100% экрана без панелей */
+        @media (orientation: landscape) {
+            #playerHeader {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+                opacity: 0;
+                transition: opacity 0.3s;
+                z-index: 50;
+            }
+            #playerHeader:hover, #playerHeader:active {
+                opacity: 1;
+            }
+            #playerModal {
+                padding: 0 !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white h-[100dvh] max-h-[100dvh] flex flex-col justify-between p-3 select-none font-sans overflow-hidden">
@@ -121,20 +141,26 @@
         </div>
     </div>
 
-    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (ДВА ЧИСТЫХ СЕРВЕРА С РУССКОЙ ОЗВУЧКОЙ БЕЗ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ) -->
+    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР С КНОПКОЙ РАЗВОРОТА ⛶ -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
-        <div class="flex items-center justify-between p-3 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-20">
+        <div id="playerHeader" class="flex items-center justify-between p-3 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-20">
             <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2">Просмотр фильма</span>
             <div class="flex items-center gap-1.5">
-                <button onclick="switchServer(1)" id="btnSrv1" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">Сервер 1 (РФ)</button>
-                <button onclick="switchServer(2)" id="btnSrv2" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold">Сервер 2 (Дубляж)</button>
-                <button onclick="closePlayer()" class="px-3.5 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold active:scale-95 ml-2">
-                    Закрыть ✕
+                <!-- Кнопка принудительного разворота на весь экран -->
+                <button onclick="makeCinemaFullscreen()" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-black active:scale-95 flex items-center gap-1">
+                    <span>⛶</span>
+                    <span class="hidden sm:inline">Во весь экран</span>
+                </button>
+                <button onclick="switchServer(1)" id="btnSrv1" class="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold">Сервер 1</button>
+                <button onclick="switchServer(2)" id="btnSrv2" class="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-bold">Сервер 2</button>
+                <button onclick="closePlayer()" class="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold active:scale-95 ml-1">
+                    ✕
                 </button>
             </div>
         </div>
-        <!-- Плеер на весь экран -->
-        <div class="flex-grow w-full h-full relative bg-black flex items-center justify-center">
+
+        <!-- Контейнер плеера (занимает 100% пространства) -->
+        <div id="cinemaContainer" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
             <iframe id="videoPlayerFrame" 
                     class="w-full h-full border-0" 
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture" 
@@ -174,7 +200,6 @@
         let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
 
-        // БАЗА СООТВЕТСТВИЙ: гарантирует точный запуск любого фильма на русском языке
         const KINOPOISK_IDS = {
             "человек-паук: возвращение домой": 690593,
             "человек-паук: вдали от дома": 1008445,
@@ -260,7 +285,6 @@
               }).subscribe();
         }
 
-        // Загрузка мировой базы
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
@@ -291,7 +315,7 @@
                     currentPage++;
                 }
             } catch (err) {
-                console.error("Ошибка загрузки:", err);
+                console.error("Ошибка загрузки базы:", err);
             } finally {
                 isLoading = false;
                 renderStack();
@@ -323,12 +347,12 @@
             card.id = "activeCard";
             card.className = "card absolute inset-0 bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col justify-end";
             
-            // ВЕРСТКА: 100% постера карточки без чёрных полос (как на скриншоте «Мстители»)
             card.innerHTML = `
                 <img src="${movie.poster_url}" 
                      alt="${movie.title}"
                      class="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
-                     loading="eager">
+                     loading="eager"
+                     onerror="this.src='https://avatars.mds.yandex.net/get-kinopoisk-image/1600647/430042eb-ee69-4818-aed0-a312400a26bf/600x900'">
                 
                 <div class="absolute top-3 right-3 z-20 px-2.5 py-1 bg-black/80 backdrop-blur-md rounded-xl text-emerald-400 font-black text-xs border border-white/10">
                     ⭐ ${movie.rating}
@@ -461,7 +485,7 @@
             renderStack();
         }
 
-        // ИСПРАВЛЕННЫЙ ПЛЕЕР (ТОЛЬКО РУССКАЯ ОЗВУЧКА, БЕЗ РЕКЛАМЫ ЧУЖИХ КАНАЛОВ)
+        // РАБОЧИЙ ПЛЕЕР С ПОЛНОЭКРАННЫМ РЕЖИМОМ ДЛЯ TELEGRAM
         let activeMovieTarget = null;
 
         function openPlayer(movie) {
@@ -471,7 +495,28 @@
             document.getElementById('playerMovieTitle').innerText = `${activeMovieTarget.title} (${activeMovieTarget.year})`;
             document.getElementById('playerModal').classList.remove('hidden');
 
+            // Автоматически расширяем Telegram WebApp на весь экран телефона
+            if (tg) {
+                tg.expand();
+                if (tg.requestFullscreen) {
+                    try { tg.requestFullscreen(); } catch(e) {}
+                }
+            }
+
             switchServer(1);
+        }
+
+        // Принудительный полноэкранный режим
+        function makeCinemaFullscreen() {
+            if (tg && tg.requestFullscreen) {
+                try { tg.requestFullscreen(); } catch(e) {}
+            }
+            const container = document.getElementById('cinemaContainer');
+            if (container.requestFullscreen) {
+                container.requestFullscreen().catch(() => {});
+            } else if (container.webkitRequestFullscreen) {
+                container.webkitRequestFullscreen();
+            }
         }
 
         function switchServer(serverNum) {
@@ -483,14 +528,12 @@
             const btn2 = document.getElementById('btnSrv2');
 
             if (serverNum === 1) {
-                btn1.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold";
-                btn2.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
-                // СЕРВЕР 1: KinoDivBox строго по номеру Кинопоиска (чистый дубляж, без рекламы каналов)
+                btn1.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold";
+                btn2.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-bold";
                 frame.src = `https://kinodivbox.github.io/iframe?id=${kpId}`;
             } else {
-                btn1.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
-                btn2.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold";
-                // СЕРВЕР 2: Чистое независимое зеркало kinokino.vip без рекламы чужих Telegram-каналов
+                btn1.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-bold";
+                btn2.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold";
                 frame.src = `https://www.kinokino.vip/film/${kpId}/`;
             }
         }
@@ -498,6 +541,9 @@
         function closePlayer() {
             document.getElementById('playerModal').classList.add('hidden');
             document.getElementById('videoPlayerFrame').src = 'about:blank';
+            if (tg && tg.exitFullscreen) {
+                try { tg.exitFullscreen(); } catch(e) {}
+            }
         }
 
         function toggleDescription() {

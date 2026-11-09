@@ -132,7 +132,7 @@
         </div>
     </div>
 
-    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (ТОЛЬКО ОДИН СТАБИЛЬНЫЙ ПЛЕЕР И ТУМБЛЕР АЛЬБОМНЫЙ/КНИЖНЫЙ) -->
+    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
         
         <!-- Шапка плеера -->
@@ -173,6 +173,9 @@
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const TMDB_API_KEY = "a8ec58e252045db51dda98b6f5db8821";
+
+        // ТОЧНЫЙ ЛОГИН ВАШЕГО БОТА ДЛЯ ЗАПУСКА MINI APP:
+        const BOT_USERNAME = "hausorkinobot";
 
         const currentUserId = tg?.initDataUnsafe?.user?.id?.toString() || ("u_" + Math.floor(Math.random() * 100000));
         const urlParams = new URLSearchParams(window.location.search);
@@ -496,7 +499,7 @@
             renderStack();
         }
 
-        // РАБОЧИЙ ПЛЕЕР (ТОЛЬКО ОДИН СТАБИЛЬНЫЙ ПЛЕЕР KINODIVBOX)
+        // РАБОЧИЙ ПЛЕЕР KINODIVBOX БЕЗ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ
         async function openPlayer(movie) {
             activeMovieTarget = movie || currentMatchedMovie;
             if (!activeMovieTarget) return;
@@ -539,16 +542,16 @@
             if (desc) desc.classList.toggle('line-clamp-3');
         }
 
+        // ШЕРИНГ: ПРЯМАЯ ССЫЛКА НА ВСПЛЫВАЮЩИЙ MINI APP В TELEGRAM
         function shareRoom() {
-            const cleanUrl = `${window.location.origin}/?room=${roomId}`;
-            const text = encodeURIComponent("Выбираем фильм на вечер! Заходи со мной:");
-            const shareLink = `https://t.me/share/url?url=${encodeURIComponent(cleanUrl)}&text=${text}`;
+            const tgAppUrl = `https://t.me/${BOT_USERNAME}/app?startapp=${roomId}`;
+            const shareText = "Выбираем фильм на вечер прямо в Telegram! Жми 👇";
             
             if (tg) {
-                tg.openTelegramLink(shareLink);
+                tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(tgAppUrl)}&text=${encodeURIComponent(shareText)}`);
             } else {
-                navigator.clipboard.writeText(cleanUrl);
-                alert("Ссылка скопирована!");
+                navigator.clipboard.writeText(tgAppUrl);
+                alert("Ссылка на комнату скопирована в буфер!");
             }
         }
 

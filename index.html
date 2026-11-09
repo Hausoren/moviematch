@@ -19,18 +19,6 @@
         .card { transition: transform 0.22s ease-out, opacity 0.22s ease-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Полноэкранный альбомный разворот без улетания кнопок */
-        .cinema-rotated {
-            transform: rotate(90deg);
-            transform-origin: bottom left;
-            position: absolute;
-            top: -100vw;
-            left: 0;
-            height: 100vw !important;
-            width: 100vh !important;
-            z-index: 9999;
-        }
     </style>
 </head>
 <body class="bg-slate-900 text-white h-[100dvh] max-h-[100dvh] flex flex-col justify-between p-3 select-none font-sans overflow-hidden">
@@ -78,7 +66,7 @@
         </div>
     </main>
 
-    <!-- КНОПКИ СВАЙПОВ -->
+    <!-- КНОПКИ СВАЙПОВ (ОСТАВЛЕНЫ БЕЗ ИЗМЕНЕНИЙ) -->
     <footer class="flex-shrink-0 w-full max-w-sm mx-auto flex items-center justify-center gap-8 py-2">
         <button onclick="handleSwipe('left')" class="w-16 h-16 rounded-full bg-slate-800 border-2 border-rose-500/40 text-rose-400 flex items-center justify-center text-3xl shadow-xl active:scale-90 transition">
             ✕
@@ -133,32 +121,30 @@
         </div>
     </div>
 
-    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (ДВА НЕЗАВИСИМЫХ СЕРВЕРА БЕЗ ЧУЖИХ КАНАЛОВ) -->
+    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (СТАБИЛЬНЫЙ, БЕЗ СМЕЩЕНИЙ И С КНОПКОЙ ЗАКРЫТИЯ) -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
         
-        <!-- Верхняя мобильная панель плеера -->
-        <div id="playerControlsHeader" class="flex items-center justify-between p-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30">
-            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[130px]">Фильм</span>
+        <!-- Шапка плеера (всегда видна, кнопки не вылетают за экран) -->
+        <div class="flex items-center justify-between px-3 py-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30">
+            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[150px]">Просмотр фильма</span>
+            
             <div class="flex items-center gap-1.5 flex-shrink-0">
-                <!-- Кнопка альбомного разворота (не улетает за экран) -->
-                <button onclick="toggleLandscape()" id="btnRotate" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold active:scale-95 flex items-center gap-1">
-                    <span>⛶</span>
-                    <span>Развернуть</span>
-                </button>
                 <button onclick="switchServer(1)" id="btnSrv1" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">Сервер 1</button>
                 <button onclick="switchServer(2)" id="btnSrv2" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold">Сервер 2</button>
-                <button onclick="closePlayer()" class="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold active:scale-95 ml-1">
-                    ✕
+                <button onclick="closePlayer()" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold active:scale-95 ml-1 flex items-center gap-1">
+                    <span>✕</span>
+                    <span>Назад</span>
                 </button>
             </div>
         </div>
         
-        <!-- Контейнер плеера -->
-        <div id="cinemaWrapper" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
+        <!-- Контейнер видео на 100% экрана -->
+        <div class="flex-grow w-full h-full relative bg-black flex items-center justify-center">
             <iframe id="videoPlayerFrame" 
                     class="w-full h-full border-0" 
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture" 
-                    allowfullscreen="true">
+                    allowfullscreen="true"
+                    webkitallowfullscreen="true">
             </iframe>
         </div>
     </div>
@@ -187,7 +173,6 @@
         let currentMatchedMovie = null;
         let activeServer = 1;
         let isLoading = false;
-        let isLandscape = false;
 
         let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
@@ -218,6 +203,7 @@
               }).subscribe();
         }
 
+        // Загрузка мировой базы TMDB
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
@@ -281,6 +267,7 @@
             card.id = "activeCard";
             card.className = "card absolute inset-0 bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col justify-end";
             
+            // ВЕРСТКА: Постер 100% карточки без обрезки лиц, текст внизу на градиенте
             card.innerHTML = `
                 <img src="${movie.poster_url}" 
                      alt="${movie.title}"
@@ -419,7 +406,9 @@
             renderStack();
         }
 
-        // РАБОЧИЙ ПЛЕЕР (ДВА НЕЗАВИСИМЫХ СЕРВЕРА БЕЗ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ)
+        // РАБОЧИЙ ПЛЕЕР (БЕЗ РЕКЛАМЫ ЧУЖИХ КАНАЛОВ И БЕЗ БИТЫХ ДОМЕНОВ)
+        let activeMovieTarget = null;
+
         function openPlayer(movie) {
             activeMovieTarget = movie || currentMatchedMovie;
             if (!activeMovieTarget) return;
@@ -444,37 +433,18 @@
             if (serverNum === 1) {
                 btn1.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold";
                 btn2.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
-                // СЕРВЕР 1: Поиск фильма по точному названию и году (Alloha/Collaps без рекламы каналов)
-                frame.src = `https://api.strvid.net/embed/movie?title=${title}&year=${year}`;
+                // СЕРВЕР 1: Автопоиск по названию фильма и году (Alloha/Collaps без рекламы каналов)
+                frame.src = `https://kinodivbox.github.io/iframe?title=${title}&year=${year}`;
             } else {
                 btn1.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
                 btn2.className = "px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold";
-                // СЕРВЕР 2: Прямой поток по мировому номеру фильма с русским переводом
-                frame.src = `https://vidsrc.cc/v2/embed/movie/${tmdbId}?autoPlay=false`;
-            }
-        }
-
-        // АЛЬБОМНЫЙ РАЗВОРОТ НА ВЕСЬ ЭКРАН ТЕЛЕФОНА (НЕ УЛЕТАЕТ В НЕБЕСА)
-        function toggleLandscape() {
-            const modal = document.getElementById('playerModal');
-            const btn = document.getElementById('btnRotate');
-            isLandscape = !isLandscape;
-
-            if (isLandscape) {
-                modal.classList.add('cinema-rotated');
-                btn.innerHTML = '<span>✕</span><span>Свернуть</span>';
-            } else {
-                modal.classList.remove('cinema-rotated');
-                btn.innerHTML = '<span>⛶</span><span>Развернуть</span>';
+                // СЕРВЕР 2: Резервный плеер по мировому номеру TMDB
+                frame.src = `https://vidsrc.cc/v2/embed/movie/${tmdbId}`;
             }
         }
 
         function closePlayer() {
-            const modal = document.getElementById('playerModal');
-            modal.classList.remove('cinema-rotated');
-            isLandscape = false;
-            document.getElementById('btnRotate').innerHTML = '<span>⛶</span><span>Развернуть</span>';
-            modal.classList.add('hidden');
+            document.getElementById('playerModal').classList.add('hidden');
             document.getElementById('videoPlayerFrame').src = 'about:blank';
         }
 

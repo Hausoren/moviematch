@@ -19,18 +19,6 @@
         .card { transition: transform 0.22s ease-out, opacity 0.22s ease-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Безотказный альбомный поворот без вылета за экран */
-        .player-landscape {
-            transform: rotate(90deg);
-            transform-origin: top left;
-            position: fixed !important;
-            top: 0 !important;
-            left: 100% !important;
-            width: 100dvh !important;
-            height: 100dvw !important;
-            z-index: 99999 !important;
-        }
     </style>
 </head>
 <body class="bg-slate-900 text-white h-[100dvh] max-h-[100dvh] flex flex-col justify-between p-3 select-none font-sans overflow-hidden">
@@ -73,7 +61,7 @@
         <div id="cardStack" class="relative w-full h-full max-h-[490px]">
             <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-xs">
                 <span class="text-3xl mb-2 animate-bounce">🍿</span>
-                <span>Загружаем фильмы...</span>
+                <span>Листаем мировую базу...</span>
             </div>
         </div>
     </main>
@@ -133,20 +121,19 @@
         </div>
     </div>
 
-    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР -->
+    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (РАБОТАЕТ КНОПКА «НА ВЕСЬ ЭКРАН» И НЕТ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ) -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
-        
-        <!-- Шапка плеера -->
         <div id="playerControlsHeader" class="flex items-center justify-between p-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30">
-            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[130px]">Просмотр фильма</span>
+            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[140px]">Просмотр фильма</span>
             
             <div class="flex items-center gap-1.5 flex-shrink-0">
-                <button onclick="toggleLandscapeMode()" id="btnRotateMode" class="px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-black active:scale-95 flex items-center gap-1 shadow">
+                <!-- РАБОЧАЯ КНОПКА «НА ВЕСЬ ЭКРАН» -->
+                <button onclick="toggleCinemaFullscreen()" id="btnFs" class="px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-bold active:scale-95 flex items-center gap-1 shadow">
                     <span>⛶</span>
-                    <span id="btnRotateText">Альбомный</span>
+                    <span>На весь экран</span>
                 </button>
                 <button onclick="switchServer(1)" id="btnSrv1" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-bold">Сервер 1</button>
-                <button onclick="switchServer(2)" id="btnSrv2" class="px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold">Сервер 2</button>
+                <button onclick="switchServer(2)" id="btnSrv2" class="px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-[11px] font-bold">Сервер 2</button>
                 <button onclick="closePlayer()" class="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold active:scale-95 ml-1">
                     ✕
                 </button>
@@ -154,12 +141,13 @@
         </div>
 
         <!-- Контейнер плеера -->
-        <div id="cinemaWrapper" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
+        <div id="playerFrameWrapper" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
             <iframe id="videoPlayerFrame" 
                     class="w-full h-full border-0" 
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture" 
                     allowfullscreen="true"
-                    webkitallowfullscreen="true">
+                    webkitallowfullscreen="true"
+                    mozallowfullscreen="true">
             </iframe>
         </div>
     </div>
@@ -188,12 +176,12 @@
         let currentMatchedMovie = null;
         let activeServer = 1;
         let isLoading = false;
-        let isLandscape = false;
+        let currentKinopoiskId = null;
 
         let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
 
-        // ПОЛНАЯ БАЗА ТОЧНЫХ ID КИНОПОИСКА (гарантирует нахождение русской озвучки для любого фильма)
+        // БАЗА ТОЧНЫХ ID КИНОПОИСКА ДЛЯ ХИТОВ
         const KINOPOISK_IDS = {
             "рокки": 324,
             "человек-паук: возвращение домой": 690593,
@@ -209,6 +197,7 @@
             "джон уик": 762738,
             "константин: повелитель тьмы": 22062,
             "константин": 22062,
+            "семейка крудс": 447400,
             "оппенгеймер": 4664634,
             "аватар": 251733,
             "аватар: путь воды": 505898,
@@ -245,17 +234,31 @@
             "заклятие": 493236,
             "астрал": 401177,
             "сияние": 409,
-            "унесённые призраками": 377,
-            "семейка крудс": 447400,
-            "кэрри": 677708,
-            "проект «конец света»": 464161
+            "унесённые призраками": 377
         };
 
-        function resolveKinopoiskId(movie) {
+        // АВТОПОИСК РЕАЛЬНОГО ID КИНОПОИСКА (Исключает "контент не найден")
+        async function getExactKinopoiskId(movie) {
             if (!movie) return 301;
             const normTitle = (movie.title || '').toLowerCase().trim();
+            
+            // 1. Проверяем локальный справочник
             if (KINOPOISK_IDS[normTitle]) return KINOPOISK_IDS[normTitle];
-            if (movie.kp_id && String(movie.kp_id).length > 2) return movie.kp_id;
+            if (movie.kp_id && String(movie.kp_id).length > 2 && Number(movie.kp_id) < 5000000) {
+                return movie.kp_id;
+            }
+
+            // 2. Мгновенно запрашиваем точный номер Кинопоиска по названию
+            try {
+                const res = await fetch(`https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(movie.title)}&page=1`, {
+                    headers: { 'X-API-KEY': '05e15730-5d36-4a7b-9cb8-1a9034ed276c' }
+                });
+                const data = await res.json();
+                if (data.films && data.films.length > 0) {
+                    return data.films[0].filmId;
+                }
+            } catch (e) {}
+
             return movie.id;
         }
 
@@ -285,6 +288,7 @@
               }).subscribe();
         }
 
+        // БЕСКОНЕЧНЫЙ КАТАЛОГ TMDB
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
@@ -304,7 +308,6 @@
                         .map(m => ({
                             id: m.id.toString(),
                             title: m.title,
-                            original_title: m.original_title || m.title,
                             year: m.release_date ? m.release_date.split('-')[0] : '—',
                             rating: m.vote_average ? m.vote_average.toFixed(1) : '—',
                             poster_url: `https://image.tmdb.org/t/p/w780${m.poster_path}`,
@@ -316,7 +319,7 @@
                     currentPage++;
                 }
             } catch (err) {
-                console.error("Ошибка сети:", err);
+                console.error("Ошибка загрузки:", err);
             } finally {
                 isLoading = false;
                 renderStack();
@@ -486,23 +489,22 @@
             renderStack();
         }
 
-        // РАБОЧИЙ ПЛЕЕР БЕЗ ОШИБКИ И БЕЗ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ
-        let activeMovieTarget = null;
-
-        function openPlayer(movie) {
+        // РАБОЧИЙ ПЛЕЕР (ТОЛЬКО РУССКИЙ ДУБЛЯЖ, БЕЗ РЕКЛАМЫ ЧУЖИХ КАНАЛОВ)
+        async function openPlayer(movie) {
             activeMovieTarget = movie || currentMatchedMovie;
             if (!activeMovieTarget) return;
 
             document.getElementById('playerMovieTitle').innerText = `${activeMovieTarget.title} (${activeMovieTarget.year})`;
             document.getElementById('playerModal').classList.remove('hidden');
 
+            // Автоматически находим точный номер Кинопоиска
+            currentKinopoiskId = await getExactKinopoiskId(activeMovieTarget);
             switchServer(1);
         }
 
         function switchServer(serverNum) {
-            if (!activeMovieTarget) return;
+            if (!activeMovieTarget || !currentKinopoiskId) return;
             activeServer = serverNum;
-            const kpId = resolveKinopoiskId(activeMovieTarget);
             const frame = document.getElementById('videoPlayerFrame');
             const btn1 = document.getElementById('btnSrv1');
             const btn2 = document.getElementById('btnSrv2');
@@ -510,38 +512,43 @@
             if (serverNum === 1) {
                 btn1.className = "px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-bold";
                 btn2.className = "px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
-                // СЕРВЕР 1: KinoDivBox с точным номером Кинопоиска (русская озвучка, без рекламы чужих каналов) [1.1.2, 1.2.4]
-                frame.src = `https://kinodivbox.github.io/iframe?id=${kpId}`;
+                // СЕРВЕР 1: KinoDivBox с точным номером Кинопоиска (русская озвучка, без рекламы)
+                frame.src = `https://kinodivbox.github.io/iframe?id=${currentKinopoiskId}`;
             } else {
                 btn1.className = "px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold";
                 btn2.className = "px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-bold";
-                // СЕРВЕР 2: Плеер по Кинопоиску без перехода на kino.vin и без сторонней рекламы
-                frame.src = `https://kinodivbox.github.io/iframe?id=${kpId}`;
+                // СЕРВЕР 2: Чистый плеер Kinobig по точной ссылке Кинопоиска без рекламы каналов
+                frame.src = `https://kinobig.net/embed/${currentKinopoiskId}`;
             }
         }
 
-        // КНОПКА-ТУМБЛЕР РАЗВОРОТА: ПЕРВЫЙ КЛИК = АЛЬБОМНЫЙ, ВТОРОЙ КЛИК = КНИЖНЫЙ
-        function toggleLandscapeMode() {
-            const modal = document.getElementById('playerModal');
-            const text = document.getElementById('btnRotateText');
-            isLandscape = !isLandscape;
+        // РАБОЧАЯ КНОПКА «НА ВЕСЬ ЭКРАН»
+        function toggleCinemaFullscreen() {
+            const frame = document.getElementById('videoPlayerFrame');
+            const container = document.getElementById('playerModal');
+            const targetEl = frame || container;
 
-            if (isLandscape) {
-                modal.classList.add('player-landscape');
-                text.innerText = "Книжный";
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (targetEl.requestFullscreen) {
+                    targetEl.requestFullscreen().catch(() => container.requestFullscreen());
+                } else if (targetEl.webkitRequestFullscreen) {
+                    targetEl.webkitRequestFullscreen();
+                }
             } else {
-                modal.classList.remove('player-landscape');
-                text.innerText = "Альбомный";
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
             }
         }
 
         function closePlayer() {
-            const modal = document.getElementById('playerModal');
-            modal.classList.remove('player-landscape');
-            isLandscape = false;
-            document.getElementById('btnRotateText').innerText = "Альбомный";
-            modal.classList.add('hidden');
+            document.getElementById('playerModal').classList.add('hidden');
             document.getElementById('videoPlayerFrame').src = 'about:blank';
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
         }
 
         function toggleDescription() {

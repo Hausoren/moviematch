@@ -42,13 +42,13 @@
                 <span class="font-black text-base tracking-tight text-white">MovieMatch</span>
             </div>
             
-            <!-- Мой список (Соло) -->
+            <!-- Мой список (ДОСТУПЕН ВСЕГДА У ОБОИХ ИГРОКОВ) -->
             <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-3 py-1.5 rounded-2xl bg-slate-800 border border-white/10 shadow-sm text-slate-200 active:scale-95 transition flex items-center gap-1.5">
                 <span>⭐ Мой список:</span>
                 <span id="savedCountBadge" class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
             </button>
 
-            <!-- Позвать пару прямо в Telegram -->
+            <!-- Кнопка Вдвоём -->
             <button onclick="shareRoom()" id="inviteBtn" class="text-xs font-bold text-white bg-indigo-600 px-3.5 py-1.5 rounded-2xl shadow-md shadow-indigo-500/30 active:scale-95 transition">
                 + Вдвоём
             </button>
@@ -90,7 +90,7 @@
         </button>
     </footer>
 
-    <!-- ЭКРАН СОЛО-РЕЖИМА -->
+    <!-- ЭКРАН СПИСКА «МОЙ СПИСОК» С ОЧИСТКОЙ И ЗАПУСКОМ ФИЛЬМОВ -->
     <div id="watchlistModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-40 hidden flex flex-col justify-end">
         <div class="bg-slate-900 rounded-t-3xl p-5 max-h-[85vh] flex flex-col shadow-2xl border-t border-white/10">
             <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
@@ -134,13 +134,10 @@
 
     <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
-        
-        <!-- Шапка плеера -->
         <div id="playerControlsHeader" class="flex items-center justify-between p-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30">
             <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[160px]">Просмотр фильма</span>
             
             <div class="flex items-center gap-2 flex-shrink-0">
-                <!-- Тумблер: Альбомный ➔ Книжный -->
                 <button onclick="toggleLandscape()" id="btnRotateToggle" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold active:scale-95 flex items-center gap-1 shadow">
                     <span>⛶</span>
                     <span id="btnRotateText">Альбомный</span>
@@ -151,7 +148,6 @@
             </div>
         </div>
 
-        <!-- Контейнер плеера KinoDivBox -->
         <div id="playerFrameWrapper" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
             <iframe id="videoPlayerFrame" 
                     class="w-full h-full border-0" 
@@ -173,9 +169,7 @@
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const TMDB_API_KEY = "a8ec58e252045db51dda98b6f5db8821";
-
-        // ТОЧНЫЙ ЛОГИН ВАШЕГО БОТА ДЛЯ ЗАПУСКА MINI APP:
-        const BOT_USERNAME = "hausorkinobot";
+        const BOT_USERNAME = "hausorkinobot"; 
 
         const currentUserId = tg?.initDataUnsafe?.user?.id?.toString() || ("u_" + Math.floor(Math.random() * 100000));
         const urlParams = new URLSearchParams(window.location.search);
@@ -193,7 +187,6 @@
         let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
 
-        // БАЗА ТОЧНЫХ ID КИНОПОИСКА
         const KINOPOISK_IDS = {
             "рокки": 324,
             "человек-паук: возвращение домой": 690593,
@@ -249,11 +242,9 @@
             "унесённые призраками": 377
         };
 
-        // Точное нахождение ID Кинопоиска
         async function getExactKinopoiskId(movie) {
             if (!movie) return 301;
             const normTitle = (movie.title || '').toLowerCase().trim();
-            
             if (KINOPOISK_IDS[normTitle]) return KINOPOISK_IDS[normTitle];
             if (movie.kp_id && String(movie.kp_id).length > 2 && Number(movie.kp_id) < 5000000) {
                 return movie.kp_id;
@@ -279,23 +270,28 @@
         async function init() {
             updateWatchlistBadge();
 
-            const isDuo = tg?.initDataUnsafe?.start_param || urlParams.get('room');
-            if (isDuo) {
-                document.getElementById('soloBtn').classList.add('hidden');
-                document.getElementById('inviteBtn').innerText = "👥 Вдвоём";
-            } else {
-                await db.from('rooms').upsert({ id: roomId });
+            // Создаем или подключаемся к комнате
+            await db.from('rooms').upsert({ id: roomId });
+
+            if (tg?.initDataUnsafe?.start_param || urlParams.get('room')) {
+                document.getElementById('inviteBtn').innerText = "👥 Комната";
             }
 
-            currentPage = Math.floor(Math.random() * 40) + 1;
-            await loadMovies();
-
-            db.channel('room-channel')
-              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, payload => {
-                  if (payload.new.matched_movie_data) {
+            // Слушаем обновления совпадений в комнате через Supabase Realtime
+            db.channel(`room_${roomId}`)
+              .on('postgres_changes', { 
+                  event: 'UPDATE', 
+                  schema: 'public', 
+                  table: 'rooms', 
+                  filter: `id=eq.${roomId}` 
+              }, payload => {
+                  if (payload.new && payload.new.matched_movie_data) {
                       showMatch(payload.new.matched_movie_data);
                   }
               }).subscribe();
+
+            currentPage = Math.floor(Math.random() * 40) + 1;
+            await loadMovies();
         }
 
         async function loadMovies() {
@@ -400,6 +396,7 @@
             swipedIds.add(movie.id.toString());
             localStorage.setItem('mm_swiped_ids', JSON.stringify(Array.from(swipedIds)));
 
+            // Сохраняем фильм в «Мой список» у свайпающего игрока (работает ВСЕГДА)
             if (isLike) {
                 if (!savedWatchlist.some(m => m.id === movie.id)) {
                     savedWatchlist.unshift(movie);
@@ -408,6 +405,7 @@
                 }
             }
 
+            // Фиксируем свайп в Supabase
             await db.from('swipes').insert({
                 room_id: roomId,
                 user_id: currentUserId,
@@ -415,15 +413,17 @@
                 is_like: isLike
             });
 
-            if (isLike && (tg?.initDataUnsafe?.start_param || urlParams.get('room'))) {
-                const { data: matches } = await db.from('swipes')
+            // Проверяем: лайкнул ли этот же фильм второй участник
+            if (isLike) {
+                const { data: partnerLikes } = await db.from('swipes')
                     .select('user_id')
                     .eq('room_id', roomId)
                     .eq('movie_id', movie.id.toString())
                     .eq('is_like', true)
                     .neq('user_id', currentUserId);
 
-                if (matches && matches.length > 0) {
+                if (partnerLikes && partnerLikes.length > 0) {
+                    // Совпадение найдено! Обновляем комнату в базе — экран сработает у обоих!
                     await db.from('rooms').update({ matched_movie_data: movie }).eq('id', roomId);
                     showMatch(movie);
                     return;
@@ -434,6 +434,7 @@
             setTimeout(renderStack, 180);
         }
 
+        // Соло-режим: просмотр своего списка и запуск любого фильма
         function openSoloWatchlist() {
             const list = document.getElementById('watchlistContent');
             if (savedWatchlist.length === 0) {
@@ -499,7 +500,7 @@
             renderStack();
         }
 
-        // РАБОЧИЙ ПЛЕЕР KINODIVBOX БЕЗ РЕКЛАМЫ ТЕЛЕГРАМ-КАНАЛОВ
+        // ЗАПУСК ПЛЕЕРА
         async function openPlayer(movie) {
             activeMovieTarget = movie || currentMatchedMovie;
             if (!activeMovieTarget) return;
@@ -513,7 +514,6 @@
             frame.src = `https://kinodivbox.github.io/iframe?id=${currentKinopoiskId}`;
         }
 
-        // БЕЗОТКАЗНЫЙ ТУМБЛЕР РАЗВОРОТА: КЛИК 1 = АЛЬБОМНЫЙ, КЛИК 2 = КНИЖНЫЙ
         function toggleLandscape() {
             const modal = document.getElementById('playerModal');
             const text = document.getElementById('btnRotateText');
@@ -542,7 +542,7 @@
             if (desc) desc.classList.toggle('line-clamp-3');
         }
 
-        // ШЕРИНГ: ПРЯМАЯ ССЫЛКА НА ВСПЛЫВАЮЩИЙ MINI APP В TELEGRAM
+        // ШЕРИНГ: Отправляет прямую ссылку на Mini App у друга
         function shareRoom() {
             const tgAppUrl = `https://t.me/${BOT_USERNAME}/app?startapp=${roomId}`;
             const shareText = "Выбираем фильм на вечер прямо в Telegram! Жми 👇";

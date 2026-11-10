@@ -20,6 +20,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+        /* Альбомный поворот экрана */
         .cinema-landscape {
             position: fixed !important;
             width: 100dvh !important;
@@ -28,6 +29,37 @@
             top: 50% !important;
             transform: translate(-50%, -50%) rotate(90deg) !important;
             z-index: 99999 !important;
+        }
+
+        /* Плавная анимация ухода плашки плеера вверх */
+        #videoPlayerFrame {
+            transition: margin-top 0.4s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Когда в альбомном режиме плашка свернута — она уезжает вверх на 52px */
+        .hide-player-tabs #videoPlayerFrame {
+            margin-top: -52px !important;
+            height: calc(100% + 52px) !important;
+        }
+
+        .hide-player-tabs #playerMovieTitle {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .hide-player-tabs #playerControlsHeader {
+            background: transparent !important;
+            border-bottom: none !important;
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        #playerControlsHeader button {
+            pointer-events: auto !important;
         }
     </style>
 </head>
@@ -42,7 +74,7 @@
             </div>
             
             <div class="flex items-center gap-1.5">
-                <!-- Новая кнопка прямого поиска фильма -->
+                <!-- Кнопка прямого поиска фильма -->
                 <button onclick="openSearchModal()" class="w-8 h-8 rounded-2xl bg-slate-800 border border-white/10 text-white flex items-center justify-center text-xs shadow-sm active:scale-95 transition" title="Поиск фильма">
                     🔍
                 </button>
@@ -152,23 +184,28 @@
         </div>
     </div>
 
-    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР -->
+    <!-- ПОЛНОЭКРАННЫЙ ПЛЕЕР (С АВТОМАТИЧЕСКИМ СКРЫТИЕМ ПЛАШКИ ПЛЕЕРОВ) -->
     <div id="playerModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col w-screen h-screen">
-        <div id="playerControlsHeader" class="flex items-center justify-between p-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30">
-            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[160px]">Просмотр фильма</span>
+        
+        <!-- Верхняя панель (в альбомном режиме плавно уходит наверх) -->
+        <div id="playerControlsHeader" class="flex items-center justify-between p-2.5 bg-slate-950 border-b border-white/10 text-white flex-shrink-0 z-30 transition-all duration-300">
+            <span id="playerMovieTitle" class="text-xs font-bold truncate pr-2 max-w-[160px] transition-opacity duration-300">Просмотр фильма</span>
             
             <div class="flex items-center gap-2 flex-shrink-0">
-                <button onclick="toggleLandscape()" id="btnRotateToggle" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold active:scale-95 flex items-center gap-1 shadow">
+                <!-- Тумблер разворота -->
+                <button onclick="toggleLandscape()" id="btnRotateToggle" class="px-3 py-1.5 rounded-xl bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-bold active:scale-95 flex items-center gap-1 shadow-lg backdrop-blur-md border border-white/10">
                     <span>⛶</span>
                     <span id="btnRotateText">Альбомный</span>
                 </button>
-                <button onclick="stopSharedWatching()" class="px-3.5 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold active:scale-95">
+                <!-- Кнопка закрытия -->
+                <button onclick="stopSharedWatching()" class="px-3.5 py-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-xl text-xs font-bold active:scale-95 shadow-lg backdrop-blur-md border border-white/10">
                     ✕
                 </button>
             </div>
         </div>
 
-        <div id="playerFrameWrapper" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
+        <!-- Контейнер плеера KinoDivBox -->
+        <div id="playerFrameWrapper" onclick="handleScreenTapInLandscape()" class="flex-grow w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
             <iframe id="videoPlayerFrame" 
                     class="w-full h-full border-0" 
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture" 
@@ -214,6 +251,7 @@
         let isLandscape = false;
         let currentKinopoiskId = null;
         let searchDebounceTimeout = null;
+        let landscapeHideTimer = null;
 
         let swipedIds = new Set(JSON.parse(localStorage.getItem(`mm_swiped_${currentUserId}`) || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem(`mm_saved_${currentUserId}`) || '[]');
@@ -337,7 +375,6 @@
               }).subscribe();
         }
 
-        // ЗАГРУЗКА МИРОВОЙ БАЗЫ
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
@@ -478,7 +515,7 @@
             setTimeout(renderStack, 180);
         }
 
-        // ==================== НОВАЯ ЛОГИКА ПРЯМОГО ПОИСКА ====================
+        // ==================== ПОИСК ФИЛЬМОВ ====================
         function openSearchModal() {
             document.getElementById('searchModal').classList.remove('hidden');
             setTimeout(() => document.getElementById('movieSearchInput').focus(), 100);
@@ -531,7 +568,6 @@
                 };
                 const movieJson = JSON.stringify(movieObj).replace(/'/g, "&apos;");
 
-                // Если в комнате с парой — доступна кнопка запуска для обоих сразу!
                 const duoBtn = isDuoRoom 
                     ? `<button onclick='startSharedWatchingFromSearch(${movieJson})' class="px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-[11px] shadow-sm active:scale-95 whitespace-nowrap">👥 Вдвоём</button>` 
                     : '';
@@ -559,8 +595,8 @@
             currentMatchedMovie = movie;
             await startSharedWatching();
         }
-        // ======================================================================
 
+        // ==================== СОЛО СПИСОК ====================
         function openSoloWatchlist() {
             const list = document.getElementById('watchlistContent');
             if (savedWatchlist.length === 0) {
@@ -626,7 +662,7 @@
             renderStack();
         }
 
-        // 1. СИНХРОННЫЙ СТАРТ ПРОСМОТРА ДЛЯ ОБОИХ УЧАСТНИКОВ
+        // ==================== ЗАПУСК ПЛЕЕРА И АВТОМАТИЧЕСКОЕ СКРЫТИЕ ПЛАШКИ ====================
         async function startSharedWatching() {
             if (!currentMatchedMovie) return;
             await db.from('rooms').update({ 
@@ -658,9 +694,12 @@
             document.getElementById('videoPlayerFrame').src = 'about:blank';
             isLandscape = false;
             document.getElementById('playerModal').classList.remove('cinema-landscape');
+            document.getElementById('playerModal').classList.remove('hide-player-tabs');
             document.getElementById('btnRotateText').innerText = "Альбомный";
+            clearTimeout(landscapeHideTimer);
         }
 
+        // ПЕРЕКЛЮЧЕНИЕ РЕЖИМА АЛЬБОМНЫЙ / КНИЖНЫЙ
         function toggleLandscape() {
             const modal = document.getElementById('playerModal');
             const text = document.getElementById('btnRotateText');
@@ -669,10 +708,38 @@
             if (isLandscape) {
                 modal.classList.add('cinema-landscape');
                 text.innerText = "Книжный";
+                // Включаем таймер: через 3.5 секунды плашка уедет вверх
+                scheduleLandscapeTabsHide();
             } else {
                 modal.classList.remove('cinema-landscape');
+                modal.classList.remove('hide-player-tabs');
                 text.innerText = "Альбомный";
+                clearTimeout(landscapeHideTimer);
             }
+        }
+
+        // Таймер скрытия плашки в альбомном режиме
+        function scheduleLandscapeTabsHide() {
+            clearTimeout(landscapeHideTimer);
+            if (!isLandscape) return;
+
+            landscapeHideTimer = setTimeout(() => {
+                if (isLandscape) {
+                    document.getElementById('playerModal').classList.add('hide-player-tabs');
+                }
+            }, 3500); // 3.5 секунды задержка
+        }
+
+        // При клике на экран в альбомном режиме — плашка возвращается обратно!
+        function handleScreenTapInLandscape() {
+            if (!isLandscape) return;
+            const modal = document.getElementById('playerModal');
+            
+            // Плавно опускаем плашку обратно
+            modal.classList.remove('hide-player-tabs');
+            
+            // Запускаем таймер заново: через 3.5 секунды она снова уедет
+            scheduleLandscapeTabsHide();
         }
 
         function toggleDescription() {

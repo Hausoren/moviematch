@@ -35,22 +35,29 @@
 
     <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
     <header class="flex-shrink-0 w-full max-w-sm mx-auto flex flex-col gap-2 pt-1 pb-2 border-b border-white/10">
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center justify-between gap-1.5">
             <div class="flex items-center gap-1.5">
                 <span class="text-2xl">🍿</span>
                 <span class="font-black text-base tracking-tight text-white">MovieMatch</span>
             </div>
             
-            <!-- Мой список (Соло) -->
-            <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-3 py-1.5 rounded-2xl bg-slate-800 border border-white/10 shadow-sm text-slate-200 active:scale-95 transition flex items-center gap-1.5">
-                <span>⭐ Мой список:</span>
-                <span id="savedCountBadge" class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
-            </button>
+            <div class="flex items-center gap-1.5">
+                <!-- Новая кнопка прямого поиска фильма -->
+                <button onclick="openSearchModal()" class="w-8 h-8 rounded-2xl bg-slate-800 border border-white/10 text-white flex items-center justify-center text-xs shadow-sm active:scale-95 transition" title="Поиск фильма">
+                    🔍
+                </button>
 
-            <!-- Кнопка комнаты -->
-            <button onclick="handleRoomButton()" id="roomActionBtn" class="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-2xl shadow-md shadow-indigo-500/30 active:scale-95 transition">
-                + Вдвоём
-            </button>
+                <!-- Мой список (Соло) -->
+                <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-2.5 py-1.5 rounded-2xl bg-slate-800 border border-white/10 shadow-sm text-slate-200 active:scale-95 transition flex items-center gap-1">
+                    <span>⭐</span>
+                    <span id="savedCountBadge" class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+                </button>
+
+                <!-- Кнопка комнаты -->
+                <button onclick="handleRoomButton()" id="roomActionBtn" class="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-2xl shadow-md shadow-indigo-500/30 active:scale-95 transition">
+                    + Вдвоём
+                </button>
+            </div>
         </div>
 
         <!-- Кнопки жанров -->
@@ -89,6 +96,20 @@
         </button>
     </footer>
 
+    <!-- ЭКРАН ПРЯМОГО ПОИСКА ФИЛЬМА -->
+    <div id="searchModal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 hidden flex flex-col p-4">
+        <div class="flex items-center gap-2 pb-3 border-b border-white/10 mb-3">
+            <div class="relative flex-grow">
+                <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                <input type="text" id="movieSearchInput" oninput="handleSearchInput()" placeholder="Введите название фильма..." class="w-full bg-slate-800 text-white pl-9 pr-3 py-2 rounded-2xl text-xs border border-white/10 focus:outline-none focus:border-indigo-500">
+            </div>
+            <button onclick="closeSearchModal()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 text-sm font-bold">✕</button>
+        </div>
+        <div id="searchResults" class="overflow-y-auto space-y-2.5 flex-grow no-scrollbar">
+            <div class="text-center py-12 text-xs text-slate-400">Начните вводить название (например, «Аватар» или «Гарри Поттер»)...</div>
+        </div>
+    </div>
+
     <!-- ЭКРАН СОЛО-РЕЖИМА -->
     <div id="watchlistModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-40 hidden flex flex-col justify-end">
         <div class="bg-slate-900 rounded-t-3xl p-5 max-h-[85vh] flex flex-col shadow-2xl border-t border-white/10">
@@ -124,7 +145,6 @@
         <p id="matchMeta" class="text-xs text-slate-300 mb-4">Год, Рейтинг</p>
 
         <div class="flex flex-col gap-2.5 w-full max-w-xs">
-            <!-- Кнопка синхронного старта для обоих участников -->
             <button onclick="startSharedWatching()" class="w-full py-3.5 rounded-2xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition">
                 Смотреть вместе в Telegram ▶️
             </button>
@@ -193,6 +213,7 @@
         let isLoading = false;
         let isLandscape = false;
         let currentKinopoiskId = null;
+        let searchDebounceTimeout = null;
 
         let swipedIds = new Set(JSON.parse(localStorage.getItem(`mm_swiped_${currentUserId}`) || '[]'));
         let savedWatchlist = JSON.parse(localStorage.getItem(`mm_saved_${currentUserId}`) || '[]');
@@ -289,11 +310,9 @@
                 roomBtn.className = "text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-2xl active:scale-95 transition";
             }
 
-            // ШАНС СОВПАДЕНИЯ: Первые страницы всегда берут проверенные мировые хиты!
             currentPage = 1; 
             await loadMovies();
 
-            // REALTIME СИНХРОНИЗАЦИЯ: Ловит и совпадение фильма, и команду СОВМЕСТНОГО ПРОСМОТРА
             db.channel(`room_${roomId}`)
               .on('postgres_changes', { 
                   event: 'UPDATE', 
@@ -304,29 +323,25 @@
                   const data = payload.new;
                   if (!data) return;
 
-                  // 1. Если найдено совпадение
                   if (data.matched_movie_data && !currentMatchedMovie) {
                       showMatch(data.matched_movie_data);
                   }
 
-                  // 2. СИНХРОННЫЙ ПРОСМОТР: Если партнёр нажал «Смотреть», открываем плеер обоим!
                   if (data.is_watching && data.matched_movie_data) {
                       launchPlayerLocal(data.matched_movie_data);
                   }
 
-                  // 3. СИНХРОННОЕ ЗАКРЫТИЕ: Если партнёр закрыл плеер
                   if (!data.is_watching && !document.getElementById('playerModal').classList.contains('hidden')) {
                       closePlayerLocal();
                   }
               }).subscribe();
         }
 
-        // БАЗА ФИЛЬМОВ С ВЫСОКИМ ШАНСОМ СОВПАДЕНИЯ
+        // ЗАГРУЗКА МИРОВОЙ БАЗЫ
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
 
-            // Сортировка по популярности и высокому порогу голосов (только самые известные хиты в начале)
             let url = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&language=ru-RU&sort_by=popularity.desc&vote_count.gte=300&page=${currentPage}`;
             if (currentGenre) {
                 url += `&with_genres=${currentGenre}`;
@@ -444,7 +459,6 @@
                 is_like: isLike
             });
 
-            // Проверка совпадения у пары
             if (isLike) {
                 const { data: partnerLikes } = await db.from('swipes')
                     .select('user_id')
@@ -463,6 +477,89 @@
             currentIndex++;
             setTimeout(renderStack, 180);
         }
+
+        // ==================== НОВАЯ ЛОГИКА ПРЯМОГО ПОИСКА ====================
+        function openSearchModal() {
+            document.getElementById('searchModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('movieSearchInput').focus(), 100);
+        }
+
+        function closeSearchModal() {
+            document.getElementById('searchModal').classList.add('hidden');
+        }
+
+        function handleSearchInput() {
+            clearTimeout(searchDebounceTimeout);
+            const query = document.getElementById('movieSearchInput').value.trim();
+            if (query.length < 2) {
+                document.getElementById('searchResults').innerHTML = '<div class="text-center py-12 text-xs text-slate-400">Введите название фильма (от 2 букв)...</div>';
+                return;
+            }
+
+            searchDebounceTimeout = setTimeout(async () => {
+                document.getElementById('searchResults').innerHTML = '<div class="text-center py-12 text-xs text-slate-400 animate-pulse">Ищем в мировой базе...</div>';
+                try {
+                    const res = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&language=ru-RU&query=${encodeURIComponent(query)}&page=1`);
+                    const data = await res.json();
+                    renderSearchResults(data.results || []);
+                } catch (e) {
+                    document.getElementById('searchResults').innerHTML = '<div class="text-center py-12 text-xs text-red-400">Ошибка поиска. Попробуйте снова.</div>';
+                }
+            }, 300);
+        }
+
+        function renderSearchResults(items) {
+            const container = document.getElementById('searchResults');
+            const valid = items.filter(m => m.title && m.overview && m.overview.trim().length > 5);
+
+            if (valid.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-xs text-slate-400">Ничего не найдено по этому запросу.</div>';
+                return;
+            }
+
+            container.innerHTML = valid.map(m => {
+                const poster = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : 'https://avatars.mds.yandex.net/get-kinopoisk-image/1600647/430042eb-ee69-4818-aed0-a312400a26bf/600x900';
+                const year = m.release_date ? m.release_date.split('-')[0] : '—';
+                const rating = m.vote_average ? m.vote_average.toFixed(1) : '—';
+                const movieObj = {
+                    id: m.id.toString(),
+                    title: m.title,
+                    year: year,
+                    rating: rating,
+                    poster_url: poster,
+                    description: m.overview
+                };
+                const movieJson = JSON.stringify(movieObj).replace(/'/g, "&apos;");
+
+                // Если в комнате с парой — доступна кнопка запуска для обоих сразу!
+                const duoBtn = isDuoRoom 
+                    ? `<button onclick='startSharedWatchingFromSearch(${movieJson})' class="px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-[11px] shadow-sm active:scale-95 whitespace-nowrap">👥 Вдвоём</button>` 
+                    : '';
+
+                return `
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-800 border border-white/5 gap-2.5">
+                        <img src="${poster}" class="w-11 h-16 object-cover rounded-xl shadow-sm flex-shrink-0" onerror="this.src='https://avatars.mds.yandex.net/get-kinopoisk-image/1600647/430042eb-ee69-4818-aed0-a312400a26bf/600x900'">
+                        <div class="flex-grow min-w-0 text-white">
+                            <h4 class="text-xs font-bold leading-tight truncate">${m.title}</h4>
+                            <p class="text-[10px] text-slate-400 mt-0.5">${year} • ⭐ ${rating}</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <button onclick='launchPlayerLocal(${movieJson}); closeSearchModal();' class="px-2.5 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-[11px] shadow-sm active:scale-95 whitespace-nowrap">
+                                Смотреть ▶
+                            </button>
+                            ${duoBtn}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function startSharedWatchingFromSearch(movie) {
+            closeSearchModal();
+            currentMatchedMovie = movie;
+            await startSharedWatching();
+        }
+        // ======================================================================
 
         function openSoloWatchlist() {
             const list = document.getElementById('watchlistContent');
@@ -532,7 +629,6 @@
         // 1. СИНХРОННЫЙ СТАРТ ПРОСМОТРА ДЛЯ ОБОИХ УЧАСТНИКОВ
         async function startSharedWatching() {
             if (!currentMatchedMovie) return;
-            // Отправляем сигнал в Supabase, чтобы плеер открылся и у партнёра
             await db.from('rooms').update({ 
                 is_watching: true,
                 matched_movie_data: currentMatchedMovie 
@@ -541,7 +637,6 @@
             launchPlayerLocal(currentMatchedMovie);
         }
 
-        // Локальный запуск плеера на экране
         async function launchPlayerLocal(movie) {
             activeMovieTarget = movie;
             document.getElementById('playerMovieTitle').innerText = `${movie.title} (${movie.year})`;
@@ -553,7 +648,6 @@
             frame.src = `https://kinodivbox.github.io/iframe?id=${currentKinopoiskId}`;
         }
 
-        // 2. СИНХРОННОЕ ЗАКРЫТИЕ ПЛЕЕРА ДЛЯ ОБОИХ
         async function stopSharedWatching() {
             await db.from('rooms').update({ is_watching: false }).eq('id', roomId);
             closePlayerLocal();
@@ -608,7 +702,7 @@
             currentGenre = genreId;
             movies = [];
             currentIndex = 0;
-            currentPage = 1; // Возвращаем топовые хиты жанра для быстрого совпадения
+            currentPage = 1;
 
             document.querySelectorAll('.genre-btn').forEach(btn => {
                 if (btn.getAttribute('data-genre') === genreId) {

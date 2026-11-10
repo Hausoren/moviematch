@@ -20,7 +20,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Альбомный поворот экрана без вылета */
         .cinema-landscape {
             position: fixed !important;
             width: 100dvh !important;
@@ -42,14 +41,14 @@
                 <span class="font-black text-base tracking-tight text-white">MovieMatch</span>
             </div>
             
-            <!-- Мой список (ДОСТУПЕН ВСЕГДА У ОБОИХ ИГРОКОВ) -->
+            <!-- Мой список (Раздельный у каждого пользователя) -->
             <button onclick="openSoloWatchlist()" id="soloBtn" class="text-xs font-bold px-3 py-1.5 rounded-2xl bg-slate-800 border border-white/10 shadow-sm text-slate-200 active:scale-95 transition flex items-center gap-1.5">
                 <span>⭐ Мой список:</span>
                 <span id="savedCountBadge" class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
             </button>
 
-            <!-- Кнопка Вдвоём -->
-            <button onclick="shareRoom()" id="inviteBtn" class="text-xs font-bold text-white bg-indigo-600 px-3.5 py-1.5 rounded-2xl shadow-md shadow-indigo-500/30 active:scale-95 transition">
+            <!-- Кнопка комнаты (Одинаковая и понятная для обоих) -->
+            <button onclick="handleRoomButton()" id="roomActionBtn" class="text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-2xl shadow-md shadow-indigo-500/30 active:scale-95 transition">
                 + Вдвоём
             </button>
         </div>
@@ -72,7 +71,7 @@
         <div id="cardStack" class="relative w-full h-full max-h-[490px]">
             <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-xs">
                 <span class="text-3xl mb-2 animate-bounce">🍿</span>
-                <span>Листаем мировую базу...</span>
+                <span>Загружаем каталог...</span>
             </div>
         </div>
     </main>
@@ -90,13 +89,13 @@
         </button>
     </footer>
 
-    <!-- ЭКРАН СПИСКА «МОЙ СПИСОК» С ОЧИСТКОЙ И ЗАПУСКОМ ФИЛЬМОВ -->
+    <!-- ЭКРАН СОЛО-РЕЖИМА -->
     <div id="watchlistModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-40 hidden flex flex-col justify-end">
         <div class="bg-slate-900 rounded-t-3xl p-5 max-h-[85vh] flex flex-col shadow-2xl border-t border-white/10">
             <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
                 <div>
                     <h3 class="text-base font-black text-white">⭐ Мой список фильмов</h3>
-                    <p class="text-[11px] text-slate-400">Сохранённые вами фильмы</p>
+                    <p class="text-[11px] text-slate-400">Фильмы, которые лайкнули лично вы</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <button onclick="clearAllWatchlist()" class="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-bold border border-rose-500/20 active:scale-95">
@@ -116,7 +115,7 @@
         <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200 mb-1">
             IT’S A MATCH!
         </h2>
-        <p class="text-xs text-slate-300 mb-3">Вы оба выбрали этот фильм:</p>
+        <p class="text-xs text-slate-300 mb-3">Вы оба выбрали этот фильм для просмотра:</p>
 
         <div class="w-40 h-60 rounded-2xl overflow-hidden shadow-2xl mb-3 border border-white/20 bg-slate-900">
             <img id="matchPoster" src="" class="w-full h-full object-cover">
@@ -171,9 +170,21 @@
         const TMDB_API_KEY = "a8ec58e252045db51dda98b6f5db8821";
         const BOT_USERNAME = "hausorkinobot"; 
 
-        const currentUserId = tg?.initDataUnsafe?.user?.id?.toString() || ("u_" + Math.floor(Math.random() * 100000));
+        // Изолированный постоянный ID пользователя (чтобы списки никогда не путались)
+        let currentUserId = tg?.initDataUnsafe?.user?.id?.toString();
+        if (!currentUserId) {
+            currentUserId = localStorage.getItem('mm_user_uid');
+            if (!currentUserId) {
+                currentUserId = "u_" + Math.floor(100000 + Math.random() * 900000);
+                localStorage.setItem('mm_user_uid', currentUserId);
+            }
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
-        let roomId = tg?.initDataUnsafe?.start_param || urlParams.get('room') || ("r_" + Math.floor(1000 + Math.random() * 9000));
+        // Получаем код комнаты
+        let incomingRoom = tg?.initDataUnsafe?.start_param || urlParams.get('room');
+        let roomId = incomingRoom || ("r_" + Math.floor(1000 + Math.random() * 9000));
+        let isDuoRoom = Boolean(incomingRoom);
 
         let movies = [];
         let currentIndex = 0;
@@ -184,8 +195,9 @@
         let isLandscape = false;
         let currentKinopoiskId = null;
 
-        let swipedIds = new Set(JSON.parse(localStorage.getItem('mm_swiped_ids') || '[]'));
-        let savedWatchlist = JSON.parse(localStorage.getItem('mm_saved_movies') || '[]');
+        // Память свайпов строго привязана к личному ID этого пользователя
+        let swipedIds = new Set(JSON.parse(localStorage.getItem(`mm_swiped_${currentUserId}`) || '[]'));
+        let savedWatchlist = JSON.parse(localStorage.getItem(`mm_saved_${currentUserId}`) || '[]');
 
         const KINOPOISK_IDS = {
             "рокки": 324,
@@ -267,33 +279,44 @@
             document.getElementById('savedCountBadge').innerText = savedWatchlist.length;
         }
 
+        // Вычисление страницы из номера комнаты (чтобы у ОБОИХ участников фильмы шли ОДИНАКОВО)
+        function getRoomPage(rId) {
+            let hash = 0;
+            for (let i = 0; i < rId.length; i++) {
+                hash = (hash << 5) - hash + rId.charCodeAt(i);
+                hash |= 0;
+            }
+            return (Math.abs(hash) % 25) + 1;
+        }
+
         async function init() {
             updateWatchlistBadge();
 
-            // Создаем или подключаемся к комнате
+            // Создаем или подтверждаем комнату в Supabase
             await db.from('rooms').upsert({ id: roomId });
 
-            if (tg?.initDataUnsafe?.start_param || urlParams.get('room')) {
-                document.getElementById('inviteBtn').innerText = "👥 Комната";
+            // Обновляем кнопку вверху у ОБОИХ пользователей
+            const roomBtn = document.getElementById('roomActionBtn');
+            if (isDuoRoom) {
+                const shortCode = roomId.replace('r_', '');
+                roomBtn.innerHTML = `👥 Комната: ${shortCode}`;
+                roomBtn.className = "text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-2xl active:scale-95 transition";
             }
 
-            // Слушаем обновления совпадений в комнате через Supabase Realtime
+            // Назначаем одинаковую стартовую страницу для комнаты
+            currentPage = isDuoRoom ? getRoomPage(roomId) : (Math.floor(Math.random() * 30) + 1);
+            await loadMovies();
+
+            // Realtime-подписка на совпадения (срабатывает мгновенно у обоих)
             db.channel(`room_${roomId}`)
-              .on('postgres_changes', { 
-                  event: 'UPDATE', 
-                  schema: 'public', 
-                  table: 'rooms', 
-                  filter: `id=eq.${roomId}` 
-              }, payload => {
+              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, payload => {
                   if (payload.new && payload.new.matched_movie_data) {
                       showMatch(payload.new.matched_movie_data);
                   }
               }).subscribe();
-
-            currentPage = Math.floor(Math.random() * 40) + 1;
-            await loadMovies();
         }
 
+        // БЕСКОНЕЧНЫЙ КАТАЛОГ С ЛЁГКИМИ БЫСТРЫМИ ПОСТЕРАМИ (w342)
         async function loadMovies() {
             if (isLoading) return;
             isLoading = true;
@@ -313,19 +336,25 @@
                         .map(m => ({
                             id: m.id.toString(),
                             title: m.title,
-                            original_title: m.original_title || m.title,
                             year: m.release_date ? m.release_date.split('-')[0] : '—',
                             rating: m.vote_average ? m.vote_average.toFixed(1) : '—',
-                            poster_url: `https://image.tmdb.org/t/p/w780${m.poster_path}`,
+                            // w342 — в 10 раз легче, открывается моментально даже на слабом интернете!
+                            poster_url: `https://image.tmdb.org/t/p/w342${m.poster_path}`,
                             description: m.overview
                         }))
                         .filter(m => !swipedIds.has(m.id));
 
                     movies = movies.concat(newItems);
                     currentPage++;
+
+                    // Фоновая предзагрузка следующей картинки в кэш телефона
+                    if (movies[currentIndex + 1]) {
+                        const pre = new Image();
+                        pre.src = movies[currentIndex + 1].poster_url;
+                    }
                 }
             } catch (err) {
-                console.error("Ошибка загрузки базы:", err);
+                console.error("Ошибка сети:", err);
             } finally {
                 isLoading = false;
                 renderStack();
@@ -336,7 +365,7 @@
             const stack = document.getElementById('cardStack');
             stack.innerHTML = '';
 
-            if (movies.length - currentIndex < 5) {
+            if (movies.length - currentIndex < 4) {
                 loadMovies();
             }
 
@@ -393,19 +422,20 @@
                 card.style.opacity = '0';
             }
 
+            // Запоминаем в персональную память свайпов
             swipedIds.add(movie.id.toString());
-            localStorage.setItem('mm_swiped_ids', JSON.stringify(Array.from(swipedIds)));
+            localStorage.setItem(`mm_swiped_${currentUserId}`, JSON.stringify(Array.from(swipedIds)));
 
-            // Сохраняем фильм в «Мой список» у свайпающего игрока (работает ВСЕГДА)
+            // Сохраняем в личный список «Мой список»
             if (isLike) {
                 if (!savedWatchlist.some(m => m.id === movie.id)) {
                     savedWatchlist.unshift(movie);
-                    localStorage.setItem('mm_saved_movies', JSON.stringify(savedWatchlist));
+                    localStorage.setItem(`mm_saved_${currentUserId}`, JSON.stringify(savedWatchlist));
                     updateWatchlistBadge();
                 }
             }
 
-            // Фиксируем свайп в Supabase
+            // Отправляем свайп в Supabase
             await db.from('swipes').insert({
                 room_id: roomId,
                 user_id: currentUserId,
@@ -413,7 +443,7 @@
                 is_like: isLike
             });
 
-            // Проверяем: лайкнул ли этот же фильм второй участник
+            // Если лайк — проверяем, лайкнул ли этот же фильм партнёр в этой комнате
             if (isLike) {
                 const { data: partnerLikes } = await db.from('swipes')
                     .select('user_id')
@@ -423,7 +453,7 @@
                     .neq('user_id', currentUserId);
 
                 if (partnerLikes && partnerLikes.length > 0) {
-                    // Совпадение найдено! Обновляем комнату в базе — экран сработает у обоих!
+                    // СОВПАДЕНИЕ! Обновляем комнату в базе — сигнал улетает обоим!
                     await db.from('rooms').update({ matched_movie_data: movie }).eq('id', roomId);
                     showMatch(movie);
                     return;
@@ -434,15 +464,14 @@
             setTimeout(renderStack, 180);
         }
 
-        // Соло-режим: просмотр своего списка и запуск любого фильма
         function openSoloWatchlist() {
             const list = document.getElementById('watchlistContent');
             if (savedWatchlist.length === 0) {
                 list.innerHTML = `
                     <div class="text-center py-12 text-xs text-slate-400">
                         <span class="text-3xl block mb-2">💔</span>
-                        Ваш список пуст.<br>
-                        Смахните карточку вправо (❤️), и фильм появится здесь!
+                        Ваш личный список пуст.<br>
+                        Смахните карточку вправо (❤️), и фильм сохранится сюда!
                     </div>`;
             } else {
                 list.innerHTML = savedWatchlist.map((m, idx) => `
@@ -468,15 +497,15 @@
 
         function removeWatchlistItem(idx) {
             savedWatchlist.splice(idx, 1);
-            localStorage.setItem('mm_saved_movies', JSON.stringify(savedWatchlist));
+            localStorage.setItem(`mm_saved_${currentUserId}`, JSON.stringify(savedWatchlist));
             updateWatchlistBadge();
             openSoloWatchlist();
         }
 
         function clearAllWatchlist() {
-            if (confirm("Очистить все сохранённые фильмы?")) {
+            if (confirm("Очистить все сохранённые вами фильмы?")) {
                 savedWatchlist = [];
-                localStorage.removeItem('mm_saved_movies');
+                localStorage.removeItem(`mm_saved_${currentUserId}`);
                 updateWatchlistBadge();
                 openSoloWatchlist();
             }
@@ -500,7 +529,6 @@
             renderStack();
         }
 
-        // ЗАПУСК ПЛЕЕРА
         async function openPlayer(movie) {
             activeMovieTarget = movie || currentMatchedMovie;
             if (!activeMovieTarget) return;
@@ -542,16 +570,23 @@
             if (desc) desc.classList.toggle('line-clamp-3');
         }
 
-        // ШЕРИНГ: Отправляет прямую ссылку на Mini App у друга
-        function shareRoom() {
+        // КНОПКА «Вдвоём / Комната»
+        function handleRoomButton() {
+            isDuoRoom = true;
+            const shortCode = roomId.replace('r_', '');
+            const roomBtn = document.getElementById('roomActionBtn');
+            roomBtn.innerHTML = `👥 Комната: ${shortCode}`;
+            roomBtn.className = "text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-2xl active:scale-95 transition";
+
+            // Формируем чистую ссылку для друга в Telegram
             const tgAppUrl = `https://t.me/${BOT_USERNAME}/app?startapp=${roomId}`;
-            const shareText = "Выбираем фильм на вечер прямо в Telegram! Жми 👇";
-            
+            const shareText = "Выбираем кино на вечер прямо в Telegram! Заходи в комнату:";
+
             if (tg) {
                 tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(tgAppUrl)}&text=${encodeURIComponent(shareText)}`);
             } else {
                 navigator.clipboard.writeText(tgAppUrl);
-                alert("Ссылка на комнату скопирована в буфер!");
+                alert("Ссылка на совместную комнату скопирована!");
             }
         }
 
